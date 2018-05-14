@@ -144,6 +144,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         Location lastLocation = locationEngine.getLastLocation();
         if (lastLocation != null) {
+            originCoord = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
             setCameraPosition(lastLocation);
         } else {
             locationEngine.addLocationEngineListener(this);
