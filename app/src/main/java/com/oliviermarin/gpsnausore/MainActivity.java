@@ -41,8 +41,14 @@ import com.mapbox.mapboxsdk.plugins.places.autocomplete.model.PlaceOptions;
 import com.mapbox.mapboxsdk.style.layers.PropertyFactory;
 import com.mapbox.mapboxsdk.style.layers.SymbolLayer;
 import com.mapbox.mapboxsdk.style.sources.GeoJsonSource;
+import com.mapbox.services.android.navigation.ui.v5.NavigationActivity;
+import com.mapbox.services.android.navigation.ui.v5.NavigationLauncher;
+import com.mapbox.services.android.navigation.ui.v5.NavigationLauncherOptions;
 import com.mapbox.services.android.navigation.ui.v5.route.NavigationMapRoute;
 import com.mapbox.services.android.navigation.v5.navigation.NavigationRoute;
+import com.mapbox.services.android.navigation.v5.routeprogress.ProgressChangeListener;
+import com.mapbox.services.android.navigation.v5.routeprogress.RouteProgress;
+
 
 import java.util.List;
 
@@ -55,7 +61,8 @@ import retrofit2.Response;
  * automatically makes geocoding requests, has built-in saved locations, includes location picker functionality,
  * and adds beautiful UI into your Android project.
  */
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, LocationEngineListener, PermissionsListener {
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback,
+        LocationEngineListener, PermissionsListener, ProgressChangeListener {
 
     private static final int REQUEST_CODE_AUTOCOMPLETE = 1;
     private MapView mapView;
@@ -102,21 +109,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 MainActivity.this.mapboxMap = mapboxMap;
                 enableLocationPlugin();
 
-                originCoord = new LatLng(originLocation.getLatitude(), originLocation.getLongitude());
-
-                initSearchFab();
-                addUserLocations();
-
                 // Add the symbol layer icon to map for future use
                 Bitmap icon = BitmapFactory.decodeResource(
                         MainActivity.this.getResources(), R.drawable.map_marker_dark);
                 mapboxMap.addImage(symbolIconId, icon);
+
+                initSearchFab();
+                initNavFab();
+                addUserLocations();
 
                 // Create an empty GeoJSON source using the empty feature collection
                 setUpSource();
 
                 // Set up a new symbol layer for displaying the searched location's feature coordinates
                 setupLayer();
+
+
             }
         });
     }
@@ -175,6 +183,27 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
     }
 
+    private void initNavFab() {
+        FloatingActionButton searchFab = findViewById(R.id.fab_nav_start);
+        searchFab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Point origin = originPosition;
+                Point destination = destinationPosition;
+                // Pass in your Amazon Polly pool id for speech synthesis using Amazon Polly
+                // Set to null to use the default Android speech synthesizer
+                NavigationLauncherOptions options = NavigationLauncherOptions.builder()
+                        .origin(origin)
+                        .destination(destination)
+                        .shouldSimulateRoute(false)
+                        .build();
+
+                // Call this method with Context from within an Activity
+                NavigationLauncher.startNavigation(MainActivity.this, options);
+            }
+        });
+    }
+
     private void addUserLocations() {
         home = CarmenFeature.builder().text("Mapbox SF Office")
                 .geometry(Point.fromLngLat(-122.399854, 37.7884400))
@@ -221,12 +250,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
 
             // Move map camera to the selected location
+            destinationCoord = new LatLng(((Point) selectedCarmenFeature.geometry()).latitude(), ((Point) selectedCarmenFeature.geometry()).longitude());
             CameraPosition newCameraPosition = new CameraPosition.Builder()
                     .target(new LatLng(((Point) selectedCarmenFeature.geometry()).latitude(),
                             ((Point) selectedCarmenFeature.geometry()).longitude()))
                     .zoom(14)
                     .build();
             mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(newCameraPosition), 4000);
+
 
             destinationPosition = Point.fromLngLat(destinationCoord.getLongitude(), destinationCoord.getLatitude());
             originPosition = Point.fromLngLat(originCoord.getLongitude(), originCoord.getLatitude());
@@ -269,6 +300,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         Log.e(TAG, "Error: " + throwable.getMessage());
                     }
                 });
+    }
+
+    private void updateUi(RouteProgress progress) {
+        progress.directionsRoute();
     }
 
     // Add the mapView lifecycle to the activity's lifecycle methods
@@ -330,11 +365,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     @SuppressWarnings( {"MissingPermission"})
     public void onConnected() {
+        Log.d(TAG, "onConnected");
         locationEngine.requestLocationUpdates();
     }
 
     @Override
     public void onLocationChanged(Location location) {
+        Log.d(TAG, "onLocationChanged");
         if (location != null) {
             setCameraPosition(location);
             locationEngine.removeLocationEngineListener(this);
@@ -363,6 +400,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onMapReady(MapboxMap mapboxMap) {
-        
+    }
+
+    @Override
+    public void onProgressChange(Location location, RouteProgress routeProgress) {
+        Log.d(TAG, "onProgressChange called");
+        updateUi(routeProgress);
     }
 }
